@@ -1,0 +1,8 @@
+id=GazMaskIndicator
+name=Gaz Mask Indicator
+description=Displays a UI indicator when wearing a gas mask, showing remaining filter duration.
+poster=poster.png
+icon=icons.png
+author=Morow
+modversion=1.0
+versionMin=42.18
