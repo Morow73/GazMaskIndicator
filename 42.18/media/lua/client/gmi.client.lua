@@ -40,14 +40,22 @@ if DEBUG then
 end
 
 ---@param texture Texture
+---@param player IsoPlayer
 ---@return ISPanel
-local function GMI_CreateIndicatorPanel(texture)
+local function GMI_CreateIndicatorPanel(texture, player)
     if indicatorPanel then return indicatorPanel end
 
-    local screenW = getCore() and getCore():getScreenWidth() or 1920
-    local screenH = getCore() and getCore():getScreenHeight() or 1080
-    local x = screenW - PANEL_WIDTH - PANEL_MARGIN
-    local y = screenH - PANEL_HEIGHT - 80
+    local x, y = 0, 0
+    local hotbar = getPlayerHotbar(player:getPlayerNum())
+
+    if hotbar then
+        x = hotbar:getAbsoluteX() + hotbar:getWidth() / 2 - PANEL_WIDTH / 2
+        y = hotbar:getAbsoluteY() - PANEL_HEIGHT
+    else
+        x = getCore():getScreenWidth() / 2 - PANEL_WIDTH / 2
+        y = getCore():getScreenHeight() - PANEL_HEIGHT - PANEL_MARGIN
+    end
+
     local savedX, savedY = GazMaskFilterPanel:getSavedPosition()
 
     if type(savedX) == "number" and type(savedY) == "number" then
@@ -81,10 +89,13 @@ end
 local function GMI_GetPlayerMaskUsed(player)
     for _, mt in ipairs(BODY_LOCATION) do
         local worn = player:getWornItem(mt)
-        local fullType = worn:getFullType()
 
-        if worn and ITEM_RESTRICTED[fullType] then
-            return worn
+        if worn then
+            local fullType = worn:getFullType()
+
+            if ITEM_RESTRICTED[fullType] then
+                return worn
+            end
         end
     end
     return nil
@@ -117,10 +128,11 @@ local function GMI_OnPlayerUpdate(playerNum)
     local mask = GMI_GetPlayerMaskUsed(player)
 
     if not mask then
-        if indicatorPanel then
+        if indicatorPanel and indicatorPanel:isVisible() then
             indicatorPanel.filterPct = 0
-            indicatorPanel:destroy()
-            indicatorPanel = nil
+            indicatorPanel:setVisible(false)
+            --indicatorPanel:destroy()
+            --indicatorPanel = nil
         end
         return
     end
@@ -150,7 +162,7 @@ local function GMI_OnPlayerUpdate(playerNum)
     end
 
     if not indicatorPanel then
-        GMI_CreateIndicatorPanel(texture)
+        GMI_CreateIndicatorPanel(texture, player)
     end
 
     if rawPct and indicatorPanel then

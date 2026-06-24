@@ -1,3 +1,4 @@
 [24/06/2026]
 - Added an custom keybind for equip/unequip mask.
 - Added an mod option for define keybind.
+- By default, the interface is placed at the top center of the toolbar.
