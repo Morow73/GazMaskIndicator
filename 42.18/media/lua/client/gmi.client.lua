@@ -1,15 +1,8 @@
-require "ISUI/ISPanel"
-
 local indicatorPanel = nil
 local DEBUG = false
 local PANEL_WIDTH = 150
 local PANEL_HEIGHT = 42
 local PANEL_MARGIN = 10
-local ICON_SIZE = 32
-local ICON_X = 5
-local BAR_X = 42
-local BAR_H = 12
-local BAR_MAX_W = PANEL_WIDTH - 49
 local BODY_LOCATION = {
     ItemBodyLocation.FULL_HAT,
     ItemBodyLocation.MASK_EYES,
@@ -25,9 +18,6 @@ local ITEM_RESTRICTED = {
     ["Base.Hat_BuildersRespirator"] = true,
     ["Base.Hat_ImprovisedGasMask"] = true
 }
-
---- @class GazMaskFilterPanel : ISPanel
-GazMaskFilterPanel = ISPanel:derive("GazMaskFilterPanel")
 
 local function GMI_round(num, dec)
     local mult = 10 ^ (dec or 2)
@@ -49,98 +39,8 @@ if DEBUG then
     end
 end
 
-function GazMaskFilterPanel:new(x, y, width, height, maskTexture)
-    local o = ISPanel:new(x, y, width, height)
-    setmetatable(o, self)
-    self.__index = self
-    o.maskTexture = maskTexture
-    o.borderColor = { r = 1, g = 1, b = 1, a = 0.5 }
-    o.backgroundColor = { r = 0.1, g = 0.1, b = 0.1, a = 0.7 }
-    o.filterPct = 0
-    return o
-end
-
-function GazMaskFilterPanel:render()
-    if self.maskTexture then
-        local tex = self.maskTexture
-        local y = math.floor((self.height - ICON_SIZE) / 2)
-        self:drawTextureScaledAspect(tex, ICON_X, y, ICON_SIZE, ICON_SIZE, 1, 1, 1, 1)
-    end
-
-    ISPanel.render(self)
-
-    local pct = math.max(0, math.min(100, self.filterPct or 0)) / 100
-    local barY = math.floor((self.height - BAR_H) / 2)
-
-    self:drawRect(BAR_X, barY, BAR_MAX_W, BAR_H, 1, 0, 0, 0)
-
-    local fillW = math.max(0, BAR_MAX_W * pct)
-
-    if fillW > 0 then
-        local r, g, b = 0.2, 1, 0.3
-        if pct < 0.2 then
-            r, g, b = 1, 0, 0
-        elseif pct < 0.5 then
-            r, g, b = 1, 0.6, 0
-        end
-        self:drawRect(BAR_X + 1, barY + 1, fillW, BAR_H - 2, 1, r, g, b)
-    end
-end
-
-function GazMaskFilterPanel:onMouseDown(x, y)
-    self.dragging = true
-    self.dragStartX = x
-    self.dragStartY = y
-    self:setCapture(true)
-end
-
-function GazMaskFilterPanel:onMouseMove(dx, dy)
-    if self.dragging then
-        self:setX(self:getX() + dx)
-        self:setY(self:getY() + dy)
-    end
-end
-
-function GazMaskFilterPanel:onMouseUp(x, y)
-    self.dragging = false
-    self:setCapture(false)
-    self:savePosition()
-end
-
-function GazMaskFilterPanel:onMouseUpOutside(x, y)
-    self.dragging = false
-    self:setCapture(false)
-    self:savePosition()
-end
-
-function GazMaskFilterPanel:destroy()
-    self:removeFromUIManager()
-    self:setCapture(false)
-end
-
-function GazMaskFilterPanel:savePosition()
-    local localPlayer = getPlayer()
-    if not localPlayer then return end
-    local player = getSpecificPlayer(localPlayer:getPlayerNum())
-    if not player then return end
-    local modData = player:getModData()
-
-    modData.GazMaskIndicator = {
-        x = self:getX(),
-        y = self:getY()
-    }
-end
-
-function GazMaskFilterPanel:getSavedPosition()
-    local localPlayer = getPlayer()
-    if not localPlayer then return nil end
-    local player = getSpecificPlayer(localPlayer:getPlayerNum())
-    if not player then return nil end
-    local modData = player:getModData()
-    if type(modData.GazMaskIndicator) ~= "table" then return nil end
-    return modData.GazMaskIndicator.x, modData.GazMaskIndicator.y
-end
-
+---@param texture Texture
+---@return ISPanel
 local function GMI_CreateIndicatorPanel(texture)
     if indicatorPanel then return indicatorPanel end
 
@@ -163,19 +63,58 @@ local function GMI_CreateIndicatorPanel(texture)
     return indicatorPanel
 end
 
+---return player inventory
+---@param player IsoPlayer
+---@return ItemContainer|nil
+local function GMI_GetPlayerInventory(player)
+    if not player then return nil end
+
+    local inventory = player:getInventory()
+    if not inventory then return nil end
+
+    return inventory
+end
+
+---return if player worn a mask
+---@param player IsoPlayer
+---@return InventoryItem|nil
+local function GMI_GetPlayerMaskUsed(player)
+    for _, mt in ipairs(BODY_LOCATION) do
+        local worn = player:getWornItem(mt)
+        local fullType = worn:getFullType()
+
+        if worn and ITEM_RESTRICTED[fullType] then
+            return worn
+        end
+    end
+    return nil
+end
+
+---return mask item data
+---@param mask InventoryItem
+---@return table|nil
+function GMI_GetMaskData(mask)
+    if not mask then return nil end
+
+    local modData = mask:getModData()
+    local maskData = {}
+
+    if type(modData) == "table" then
+        for key, value in pairs(modData) do
+            maskData[key] = value
+        end
+    end
+
+    return maskData
+end
+
+---player update
+---@param playerNum integer
 local function GMI_OnPlayerUpdate(playerNum)
     local player = getSpecificPlayer(playerNum)
     if not player then return end
 
-    local mask = nil
-
-    for _, mt in ipairs(BODY_LOCATION) do
-        local worn = player:getWornItem(mt)
-        if worn and ITEM_RESTRICTED[worn:getFullType()] then
-            mask = worn
-            break
-        end
-    end
+    local mask = GMI_GetPlayerMaskUsed(player)
 
     if not mask then
         if indicatorPanel then
@@ -186,18 +125,10 @@ local function GMI_OnPlayerUpdate(playerNum)
         return
     end
 
-    local maskData = {}
-    local modData = mask:getModData()
-
-    if type(modData) == "table" then
-        for key, value in pairs(modData) do
-            maskData[key] = value
-        end
-    end
-
+    local maskData = GMI_GetMaskData(mask)
     local rawPct = nil
 
-    if maskData['usedDelta'] and (maskData['filterType'] or maskData['tankType']) then
+    if maskData and maskData['usedDelta'] and (maskData['filterType'] or maskData['tankType']) then
         rawPct = GMI_round(maskData['usedDelta'] * 100)
 
         if rawPct <= 0 then
@@ -248,5 +179,63 @@ local function GMI_OnGameTick()
     end
 end
 
+local function GMI_OnKeyPressed(key)
+    if key == Keyboard.KEY_NONE or key ~= GMI_GetOptions() then return end
+
+    local player = getSpecificPlayer(0)
+
+    if not player or player:isDead() then return end
+
+    local maskItem, equiped = nil, false
+
+    local mask = GMI_GetPlayerMaskUsed(player)
+
+    if mask then
+        maskItem = mask
+        equiped = true
+    end
+
+    if not maskItem then
+        local inventory = GMI_GetPlayerInventory(player)
+
+        if not inventory or not inventory.getItems then return end
+
+        local items = inventory:getItems()
+        local low = math.huge
+        if not items then return end
+
+        for i = 0, items:size() - 1 do
+            local item = items:get(i)
+            local fullType = item:getFullType()
+
+            if ITEM_RESTRICTED[fullType] then
+                local modData = GMI_GetMaskData(item)
+
+                if modData and modData['usedDelta'] and (modData['filterType'] or modData['tankType']) then
+                    local rawPct = GMI_round(modData['usedDelta'] * 100)
+
+                    if rawPct > 0 and rawPct < low then
+                        low = rawPct
+                        maskItem = item
+                    end
+                end
+            end
+        end
+    end
+
+    if maskItem then
+        if not equiped then
+            ISInventoryPaneContextMenu.wearItem(maskItem, player:getPlayerNum())
+        else
+            ISTimedActionQueue.add(ISUnequipAction:new(player, maskItem, 50))
+        end
+    end
+
+    if indicatorPanel then
+        indicatorPanel:setVisible(equiped)
+    end
+end
+
 Events.OnTick.Add(GMI_OnGameTick)
 Events.OnPlayerDeath.Add(GMI_OnPlayerSpawn)
+Events.OnKeyPressed.Add(GMI_OnKeyPressed)

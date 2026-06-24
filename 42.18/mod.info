@@ -4,5 +4,5 @@ description=Displays a UI indicator when wearing a gas mask, showing remaining f
 poster=poster.png
 icon=icons.png
 author=Morow
-modversion=1.0
+modversion=1.1
 versionMin=42.18
